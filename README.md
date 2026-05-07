@@ -6,7 +6,7 @@ A flashy terminal user interface for Rainwave radio stations.
 
 ## Current Status
 
-This repo currently contains a working Rust/Ratatui prototype with live Rainwave API parsing, external-player playback, Ctrl-based commands, keyring-backed credential storage, a demo GIF, and regression tests for the API shapes that previously broke startup.
+This repo currently contains a working Rust/Ratatui prototype with live Rainwave API parsing, external-player playback, Ctrl-based commands, keyring-backed credential storage, a demo GIF, and regression test cases.
 
 ## Recent Changes
 
@@ -39,11 +39,17 @@ This repo currently contains a working Rust/Ratatui prototype with live Rainwave
 
 ## Installation
 
-```bash
-git clone <repo-url>
-cd Rainwave-TUI
-cargo build --release
-```
+### On Windows
+
+1. Download and install Rust from [rust-lang.org](https://www.rust-lang.org/tools/install).
+2. Install either `mpv`, `mplayer`, or `ffplay`.
+3. Open a terminal and run:
+
+   ```bash
+   git clone https://github.com/ghostfrogcherry/Rainwave-TUI.git
+   cd Rainwave-TUI
+   cargo build --release
+   ```
 
 ## Usage
 
@@ -86,7 +92,7 @@ cargo run
 
 ## Configuration
 
-Passwords are never stored. Rainwave API keys are stored in the operating system keyring. `~/.config/rainwave-tui/config.json` only stores non-secret metadata such as username, user ID, and station ID.
+Passwords are never stored. Rainwave API keys are stored in the operating system keyring. `~/.config/rainwave-tui/config.json` only stores non-secret metadata such as username, user ID, and station preferences.
 
 Older configs containing a plaintext `api_key` are migrated into the keyring and rewritten without the secret on next load/save. Logout removes the keyring entry.
 
