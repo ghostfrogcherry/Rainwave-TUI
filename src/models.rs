@@ -189,6 +189,13 @@ pub struct SyncData {
     pub listener_count: Option<i32>,
 }
 
+#[derive(Debug, Clone)]
+pub struct AlbumArt {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Vec<(u8, u8, u8)>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

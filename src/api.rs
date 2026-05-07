@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use image::imageops::FilterType;
 use reqwest::Client;
 use serde::Deserialize;
 use std::time::Duration;
@@ -392,6 +393,23 @@ impl RainwaveApi {
 
     pub async fn get_stream_url(&self, format: &str) -> Result<String> {
         Ok(format!("https://rainwave.cc/tune_in/{}.{}", self.station_id, format))
+    }
+
+    pub async fn get_album_art(&self, url: &str, width: u32, height: u32) -> Result<AlbumArt> {
+        let bytes = self.client
+            .get(url)
+            .send()
+            .await?
+            .bytes()
+            .await?;
+        let image = image::load_from_memory(&bytes)?
+            .resize_exact(width, height, FilterType::Triangle)
+            .to_rgb8();
+        let pixels = image.pixels()
+            .map(|p| (p[0], p[1], p[2]))
+            .collect();
+
+        Ok(AlbumArt { width, height, pixels })
     }
 }
 

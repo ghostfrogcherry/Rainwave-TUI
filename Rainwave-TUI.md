@@ -83,7 +83,13 @@ The player module tracks whether the subprocess is active or paused. Pause/resum
 
 Rainwave exposes album art paths under `songs[].albums[].art`. The API normalization layer turns relative art paths into full `https://rainwave.cc/...` URLs and stores them on `Song::art_url`.
 
-The current TUI renders a styled album-art placeholder plus the resolved art URL. Actual inline image rendering is still a follow-up because terminal graphics support varies by emulator and environment.
+The app fetches the current album image through `reqwest`, decodes it with the `image` crate, downsamples it to a small square, and renders it with upper-half block characters using RGB foreground/background colors. This avoids requiring Kitty/Sixel/iTerm graphics support while still showing real album art in normal color-capable terminals.
+
+If image fetch or decoding fails, the panel falls back to a styled placeholder with the album name and resolved art URL.
+
+## Search Flow
+
+`Ctrl+K` switches to the Search view and enters search input mode. Typed characters update the query shown in the search box. Pressing `Enter` queues the query for the main event loop, which awaits `api.search()` and updates `search_results` in app state. This avoids the earlier detached task behavior where results were fetched and discarded.
 
 ## Controls
 
@@ -136,13 +142,14 @@ Future improvement: replace it with a real terminal recording once a recorder is
 - Added play/pause/resume and stop controls.
 - Added animated transitions and audio activity indicator.
 - Added album-art metadata extraction and Now Playing art panel.
+- Added actual album-art HTTP fetching, image decoding, downsampling, and terminal color-block rendering.
+- Fixed search text input and result population.
 - Added progress text and progress bar improvements.
 - Added README demo GIF and synchronized README/design documentation.
 - Added regression tests for live Rainwave JSON shapes and null handling.
 
 ## Known Follow-Ups
 
-- Replace album-art URL placeholder with actual terminal image rendering where terminal support is available.
 - Replace scripted README GIF with a real terminal recording when recording tooling is available.
 - Wire login completion back into app state instead of spawning detached login requests.
 - Complete album browsing and request/search result state updates.

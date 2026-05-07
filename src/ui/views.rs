@@ -8,7 +8,7 @@ use ratatui::{
 };
 use crate::ui::widgets::*;
 
-pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData>, tick: u64, station_name: &str) {
+pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData>, album_art: Option<&AlbumArt>, tick: u64, station_name: &str) {
     let block = styled_block(&format!(" 🎵 Now Playing - {} ", station_name), Color::Cyan);
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -21,7 +21,7 @@ pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData
                     .constraints([Constraint::Length(30), Constraint::Min(0)])
                     .split(inner);
 
-                render_album_art(f, columns[0], song);
+                render_album_art(f, columns[0], song, album_art);
 
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
@@ -112,10 +112,34 @@ pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData
     }
 }
 
-fn render_album_art(f: &mut Frame, area: Rect, song: &Song) {
+fn render_album_art(f: &mut Frame, area: Rect, song: &Song, album_art: Option<&AlbumArt>) {
     let block = styled_block(" Album Art ", Color::Magenta);
     let inner = block.inner(area);
     f.render_widget(block, area);
+
+    if let Some(art) = album_art {
+        let rows: Vec<Line> = (0..art.height).step_by(2).map(|y| {
+            let spans: Vec<Span> = (0..art.width).map(|x| {
+                let top = art.pixels[(y * art.width + x) as usize];
+                let bottom = if y + 1 < art.height {
+                    art.pixels[((y + 1) * art.width + x) as usize]
+                } else {
+                    (0, 0, 0)
+                };
+                Span::styled(
+                    "▀",
+                    Style::default()
+                        .fg(Color::Rgb(top.0, top.1, top.2))
+                        .bg(Color::Rgb(bottom.0, bottom.1, bottom.2)),
+                )
+            }).collect();
+            Line::from(spans)
+        }).collect();
+
+        let art_panel = Paragraph::new(rows).alignment(Alignment::Center);
+        f.render_widget(art_panel, inner);
+        return;
+    }
 
     let album = song.album.as_deref().unwrap_or("Unknown Album");
     let art = song.art_url.as_deref().unwrap_or("No album art URL");

@@ -1504,6 +1504,7 @@ dependencies = [
  "chrono",
  "crossterm 0.28.1",
  "dirs",
+ "image",
  "keyring",
  "ratatui 0.30.0",
  "ratatui-image",

@@ -76,6 +76,9 @@ pub struct App {
     pub animation_tick: u64,
     pub transition_frames: u8,
     pub transition_label: String,
+    pub pending_search: Option<String>,
+    pub album_art: Option<AlbumArt>,
+    pub album_art_url: Option<String>,
 }
 
 impl App {
@@ -119,6 +122,9 @@ impl App {
             animation_tick: 0,
             transition_frames: 0,
             transition_label: "Now Playing".to_string(),
+            pending_search: None,
+            album_art: None,
+            album_art_url: None,
         })
     }
 
@@ -138,12 +144,32 @@ impl App {
     pub async fn refresh_data(&mut self) -> Result<()> {
         match self.api.get_info().await {
             Ok(data) => {
+                let art_url = data.sched_current.as_ref()
+                    .and_then(|current| current.song.as_ref())
+                    .and_then(|song| song.art_url.clone());
                 self.sync_data = Some(data);
+                self.update_album_art(art_url).await;
                 Ok(())
             }
             Err(e) => {
                 self.set_status(format!("Error: {}", e));
                 Err(e)
+            }
+        }
+    }
+
+    async fn update_album_art(&mut self, art_url: Option<String>) {
+        if art_url == self.album_art_url {
+            return;
+        }
+
+        self.album_art_url = art_url.clone();
+        self.album_art = None;
+
+        if let Some(url) = art_url {
+            match self.api.get_album_art(&url, 24, 24).await {
+                Ok(art) => self.album_art = Some(art),
+                Err(e) => self.set_status(format!("Album art unavailable: {e}")),
             }
         }
     }
@@ -335,11 +361,7 @@ impl App {
     fn handle_search_input(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter => {
-                let query = self.search_query.clone();
-                let api = self.api.clone();
-                tokio::spawn(async move {
-                    let _ = api.search(&query).await;
-                });
+                self.pending_search = Some(self.search_query.clone());
                 self.input_mode = InputMode::Normal;
             }
             KeyCode::Esc => {
@@ -427,6 +449,7 @@ impl App {
                 }
             }
             KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.set_view(AppView::Search);
                 self.input_mode = InputMode::Search;
                 self.search_query.clear();
             }
@@ -653,6 +676,19 @@ async fn run_event_loop(
                 app.handle_key(key);
             }
         }
+
+        if let Some(query) = app.pending_search.take() {
+            if !query.trim().is_empty() {
+                match app.api.search(&query).await {
+                    Ok(results) => {
+                        app.search_results = results;
+                        app.selected_search = 0;
+                        app.set_status(format!("Search complete: {query}"));
+                    }
+                    Err(e) => app.set_status(format!("Search failed: {e}")),
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -679,7 +715,7 @@ fn ui(f: &mut Frame, app: &mut App) {
                 ])
                 .split(main_area);
             
-            render_now_playing(f, inner_chunks[0], &app.sync_data, app.animation_tick,
+            render_now_playing(f, inner_chunks[0], &app.sync_data, app.album_art.as_ref(), app.animation_tick,
                 &app.stations.get(app.selected_station)
                     .map(|s| s.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()));

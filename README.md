@@ -12,7 +12,8 @@ This repo currently contains a working Rust/Ratatui prototype with live Rainwave
 
 - Added screen-switch transition overlays and animated now-playing music glyphs.
 - Added a clear audio status meter in the bottom status bar.
-- Added album-art metadata parsing from Rainwave `songs[].albums[].art` and an album-art panel in Now Playing.
+- Added album-art metadata parsing from Rainwave `songs[].albums[].art`, HTTP image fetching, and terminal color-block rendering in Now Playing.
+- Fixed search input so `Ctrl+K`, typing, and `Enter` populate in-app results.
 - Added elapsed/remaining progress text plus a progress bar.
 - Split playback into play/pause/resume and stop.
 - Converted commands to Ctrl-based keybindings.
@@ -24,7 +25,7 @@ This repo currently contains a working Rust/Ratatui prototype with live Rainwave
 ## Features
 
 - 🎵 **Now Playing** - Shows current song, artist, album, and progress
-- 🖼️ **Album Art Panel** - Shows album art URL/placeholder from Rainwave metadata
+- 🖼️ **Album Art Panel** - Pulls Rainwave album art and renders it with terminal color blocks
 - ✨ **Animations** - Screen-switch transition overlays, animated music glyphs, and an audio activity meter
 - 📻 **Station Selection** - Browse and switch between Rainwave stations
 - 🗳️ **Voting** - Vote for songs in elections
@@ -100,7 +101,7 @@ cargo build
 
 - Playback requires `mpv`, `mplayer`, or `ffplay` on `PATH`.
 - Pause/resume uses process signals for the external player.
-- The album-art panel currently displays a styled placeholder and resolved art URL; true image rendering is a follow-up for terminals with compatible graphics support.
+- Album art is fetched over HTTP and rendered using RGB terminal color blocks. If art cannot be fetched, the panel falls back to album name and art URL.
 - Login flow stores only the Rainwave API key returned by login, and stores it in the OS keyring.
 
 ## Colors & Styling
