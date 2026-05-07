@@ -8,7 +8,7 @@ use ratatui::{
 };
 use crate::ui::widgets::*;
 
-pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData>, station_name: &str) {
+pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData>, tick: u64, station_name: &str) {
     let block = styled_block(&format!(" 🎵 Now Playing - {} ", station_name), Color::Cyan);
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -36,7 +36,8 @@ pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData
                     .split(columns[1]);
 
                 // Visual indicator
-                let indicator = Paragraph::new("♪♫♬ ♭♮♯ ")
+                let frames = ["♪♫♬ ♭♮♯ ", "♫♬♩ ♮♯♭ ", "♬♩♪ ♯♭♮ ", "♩♪♫ ♭♮♯ "];
+                let indicator = Paragraph::new(frames[(tick as usize / 3) % frames.len()])
                     .style(Style::default().fg(Color::Magenta))
                     .alignment(Alignment::Center);
                 f.render_widget(indicator, chunks[0]);
@@ -424,8 +425,16 @@ pub fn render_albums(f: &mut Frame, area: Rect, albums: &[Album], selected: usiz
     f.render_widget(list, inner);
 }
 
-pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, playing: bool, paused: bool, station: &str) {
+pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, playing: bool, paused: bool, tick: u64, station: &str) {
     let play_icon = if paused { "⏸" } else if playing { "▶" } else { "■" };
+    let meter = if playing && !paused {
+        let frames = ["▁▃▅▇", "▂▄▆█", "▇▅▃▁", "█▆▄▂"];
+        frames[(tick as usize / 2) % frames.len()]
+    } else if paused {
+        "▃▃▃▃"
+    } else {
+        "____"
+    };
     let user_str = user.as_ref()
         .map(|u| format!("{} ({} pts)", u.username, u.listener_points))
         .unwrap_or_else(|| "Not logged in (Ctrl+L to login)".to_string());
@@ -433,6 +442,8 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, pla
     let status = Paragraph::new(Text::from(vec![
         Line::from(vec![
             Span::styled(play_icon, Style::default().fg(Color::Green).bold()),
+            Span::raw(" "),
+            Span::styled(meter, Style::default().fg(Color::Green).bold()),
             Span::raw(" "),
             Span::styled(station, Style::default().fg(Color::Cyan)),
             Span::raw(" | "),
@@ -442,6 +453,30 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, pla
     .block(Block::default().borders(Borders::TOP))
     .style(Style::default().bg(Color::DarkGray));
     f.render_widget(status, area);
+}
+
+pub fn render_transition(f: &mut Frame, area: Rect, label: &str, tick: u64) {
+    let frames = ["◐", "◓", "◑", "◒"];
+    let spinner = frames[(tick as usize) % frames.len()];
+    let arrows = ["=>", "==>", "===>", "====>"];
+    let arrow = arrows[(tick as usize / 2) % arrows.len()];
+    let block = styled_block(" Switching Views ", Color::Cyan);
+    let inner = block.inner(area);
+
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(block, area);
+    let text = Text::from(vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(spinner, Style::default().fg(Color::Magenta).bold()),
+            Span::raw(" "),
+            Span::styled(arrow, Style::default().fg(Color::Cyan).bold()),
+            Span::raw(" "),
+            Span::styled(label.to_string(), Style::default().fg(Color::Yellow).bold()),
+        ]),
+    ]);
+    let popup = Paragraph::new(text).alignment(Alignment::Center);
+    f.render_widget(popup, inner);
 }
 
 pub fn render_keybindings(f: &mut Frame, area: Rect, view_name: &str) {

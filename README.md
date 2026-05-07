@@ -2,9 +2,30 @@
 
 A flashy terminal user interface for Rainwave radio stations.
 
+![Rainwave TUI demo](docs/rainwave-tui-demo.gif)
+
+## Current Status
+
+This repo currently contains a working Rust/Ratatui prototype with live Rainwave API parsing, external-player playback, Ctrl-based commands, keyring-backed credential storage, a demo GIF, and regression tests for the API shapes that previously broke startup.
+
+## Recent Changes
+
+- Added screen-switch transition overlays and animated now-playing music glyphs.
+- Added a clear audio status meter in the bottom status bar.
+- Added album-art metadata parsing from Rainwave `songs[].albums[].art` and an album-art panel in Now Playing.
+- Added elapsed/remaining progress text plus a progress bar.
+- Split playback into play/pause/resume and stop.
+- Converted commands to Ctrl-based keybindings.
+- Made `Esc` close help/input overlays.
+- Hardened JSON parsing against Rainwave's real response shapes, alternate field names, and explicit `null` values.
+- Added keyring-backed API-key storage so secrets are not written to config JSON.
+- Added `Rainwave-TUI.md` as the synchronized design document.
+
 ## Features
 
 - 🎵 **Now Playing** - Shows current song, artist, album, and progress
+- 🖼️ **Album Art Panel** - Shows album art URL/placeholder from Rainwave metadata
+- ✨ **Animations** - Screen-switch transition overlays, animated music glyphs, and an audio activity meter
 - 📻 **Station Selection** - Browse and switch between Rainwave stations
 - 🗳️ **Voting** - Vote for songs in elections
 - 📋 **Request Queue** - Manage your song requests
@@ -38,21 +59,23 @@ cargo run
 - `Enter` - Select item / Vote / Request song
 
 ### Actions
-- `v` - Vote for selected song in election
-- `r` - Rate current song (opens rating input)
-- `f` - Favorite/unfavorite current song
-- `R` - Add current song to request queue
-- `d` - Delete selected request
+- `Ctrl+V` - Vote for selected song in election
+- `Ctrl+T` - Rate current song (opens rating input)
+- `Ctrl+F` - Favorite/unfavorite current song
+- `Ctrl+R` - Add current song to request queue
+- `Ctrl+D` - Delete selected request
 
 ### Playback
-- `p` or `Space` - Play/Pause
-- `s` - Switch station (use Tab to go to Stations view)
+- `Ctrl+P` - Play/Pause/Resume
+- `Ctrl+O` - Stop playback
+- `Ctrl+B` - Browse stations
 
 ### Other
-- `l` - Login/Logout
-- `/` - Search
-- `?` - Toggle help
-- `q` - Quit
+- `Ctrl+L` - Login/Logout
+- `Ctrl+K` - Search
+- `Ctrl+H` - Toggle help
+- `Esc` - Close help/input
+- `Ctrl+Q` - Quit
 
 ## Requirements
 
@@ -62,7 +85,23 @@ cargo run
 
 ## Configuration
 
-Login credentials are stored in `~/.config/rainwave-tui/config.json`
+Passwords are never stored. Rainwave API keys are stored in the operating system keyring. `~/.config/rainwave-tui/config.json` only stores non-secret metadata such as username, user ID, and station ID.
+
+Older configs containing a plaintext `api_key` are migrated into the keyring and rewritten without the secret on next load/save. Logout removes the keyring entry.
+
+## Verification
+
+```bash
+cargo test
+cargo build
+```
+
+## Known Notes
+
+- Playback requires `mpv`, `mplayer`, or `ffplay` on `PATH`.
+- Pause/resume uses process signals for the external player.
+- The album-art panel currently displays a styled placeholder and resolved art URL; true image rendering is a follow-up for terminals with compatible graphics support.
+- Login flow stores only the Rainwave API key returned by login, and stores it in the OS keyring.
 
 ## Colors & Styling
 

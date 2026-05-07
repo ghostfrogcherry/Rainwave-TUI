@@ -26,6 +26,21 @@ pub enum AppView {
     Login,
 }
 
+impl AppView {
+    fn label(&self) -> &'static str {
+        match self {
+            AppView::NowPlaying => "Now Playing",
+            AppView::Stations => "Stations",
+            AppView::Requests => "Requests",
+            AppView::Search => "Search",
+            AppView::Albums => "Albums",
+            AppView::AlbumView(_) => "Album",
+            AppView::Help => "Help",
+            AppView::Login => "Login",
+        }
+    }
+}
+
 pub enum InputMode {
     Normal,
     Search,
@@ -58,6 +73,9 @@ pub struct App {
     pub rating_input: String,
     pub login_username: String,
     pub login_password: String,
+    pub animation_tick: u64,
+    pub transition_frames: u8,
+    pub transition_label: String,
 }
 
 impl App {
@@ -98,6 +116,9 @@ impl App {
             rating_input: String::new(),
             login_username: String::new(),
             login_password: String::new(),
+            animation_tick: 0,
+            transition_frames: 0,
+            transition_label: "Now Playing".to_string(),
         })
     }
 
@@ -153,6 +174,7 @@ impl App {
     }
 
     pub fn logout(&mut self) {
+        self.auth.clear_secret();
         self.auth.user_id = None;
         self.auth.api_key = None;
         self.auth.username = None;
@@ -398,7 +420,7 @@ impl App {
             }
             KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if !self.auth.is_logged_in() {
-                    self.current_view = AppView::Login;
+                    self.set_view(AppView::Login);
                     self.input_mode = InputMode::LoginUsername;
                 } else {
                     self.logout();
@@ -473,7 +495,7 @@ impl App {
                 }
             }
             KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.current_view = AppView::Stations;
+                self.set_view(AppView::Stations);
             }
             KeyCode::Up => {
                 self.navigate_up();
@@ -572,7 +594,7 @@ impl App {
     }
 
     fn next_view(&mut self) {
-        self.current_view = match self.current_view {
+        let next = match self.current_view {
             AppView::NowPlaying => AppView::Stations,
             AppView::Stations => AppView::Requests,
             AppView::Requests => AppView::Search,
@@ -581,6 +603,13 @@ impl App {
             AppView::AlbumView(_) => AppView::NowPlaying,
             _ => AppView::NowPlaying,
         };
+        self.set_view(next);
+    }
+
+    fn set_view(&mut self, view: AppView) {
+        self.transition_label = view.label().to_string();
+        self.transition_frames = 8;
+        self.current_view = view;
     }
 }
 
@@ -613,6 +642,9 @@ async fn run_event_loop(
             let _ = app.refresh_data().await;
             *last_refresh = Instant::now();
         }
+
+        app.animation_tick = app.animation_tick.wrapping_add(1);
+        app.transition_frames = app.transition_frames.saturating_sub(1);
 
         terminal.draw(|f| ui(f, app))?;
 
@@ -647,7 +679,7 @@ fn ui(f: &mut Frame, app: &mut App) {
                 ])
                 .split(main_area);
             
-            render_now_playing(f, inner_chunks[0], &app.sync_data, 
+            render_now_playing(f, inner_chunks[0], &app.sync_data, app.animation_tick,
                 &app.stations.get(app.selected_station)
                     .map(|s| s.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()));
@@ -721,6 +753,7 @@ fn ui(f: &mut Frame, app: &mut App) {
         &user_info,
         app.player.is_playing(),
         app.player.is_paused(),
+        app.animation_tick,
         station_name,
     );
     
@@ -738,6 +771,10 @@ fn ui(f: &mut Frame, app: &mut App) {
     
     if app.show_help {
         render_help(f, centered_rect(60, 70, f.area()));
+    }
+
+    if app.transition_frames > 0 {
+        render_transition(f, centered_rect(42, 16, f.area()), &app.transition_label, app.animation_tick);
     }
     
     if matches!(app.input_mode, InputMode::Rating) {
