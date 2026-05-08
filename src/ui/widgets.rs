@@ -1,8 +1,7 @@
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
-    widgets::{Block, Borders, Cell, Gauge, LineGauge, Paragraph, Row, Table, Wrap},
-    text::{Line, Span},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    widgets::{Block, Borders, Cell, LineGauge, Row},
 };
 
 pub fn styled_block(title: &str, color: Color) -> Block<'static> {
@@ -15,8 +14,8 @@ pub fn styled_block(title: &str, color: Color) -> Block<'static> {
 pub fn progress_bar(percent: f64, color: Color) -> LineGauge<'static> {
     LineGauge::default()
         .ratio(percent)
-        .line_set(ratatui::symbols::line::THICK)
-        .style(Style::default().fg(color))
+        .filled_style(Style::default().fg(color))
+        .unfilled_style(Style::default().fg(Color::DarkGray))
 }
 
 pub fn format_duration(seconds: i32) -> String {

@@ -1,74 +1,103 @@
 use crate::models::*;
+use crate::ui::widgets::*;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap},
+    style::{Color, Style},
     text::{Line, Span, Text},
+    widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap},
     Frame,
 };
-use crate::ui::widgets::*;
 
-pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData>, album_art: Option<&AlbumArt>, tick: u64, station_name: &str) {
-    let block = styled_block(&format!(" 🎵 Now Playing - {} ", station_name), Color::Cyan);
+pub fn render_now_playing(
+    f: &mut Frame,
+    area: Rect,
+    sync_data: &Option<SyncData>,
+    album_art: Option<&AlbumArt>,
+    tick: u64,
+    station_name: &str,
+) {
+    let block = styled_block(&format!(" Now Playing - {} ", station_name), Color::Cyan);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
     if let Some(data) = sync_data {
         if let Some(current) = &data.sched_current {
             if let Some(song) = &current.song {
-                let columns = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Length(30), Constraint::Min(0)])
-                    .split(inner);
+                let columns = if inner.width >= 72 {
+                    Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([Constraint::Length(30), Constraint::Min(0)])
+                        .split(inner)
+                } else {
+                    Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([Constraint::Length(0), Constraint::Min(0)])
+                        .split(inner)
+                };
 
-                render_album_art(f, columns[0], song, album_art);
+                if columns[0].width > 0 {
+                    render_album_art(f, columns[0], song, album_art);
+                }
 
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([
-                        Constraint::Length(1),
-                        Constraint::Length(3),
-                        Constraint::Length(3),
+                        Constraint::Length(2),
+                        Constraint::Length(4),
+                        Constraint::Length(2),
                         Constraint::Length(1),
                         Constraint::Length(2),
                         Constraint::Min(0),
                     ])
                     .split(columns[1]);
 
-                // Visual indicator
                 let frames = ["♪♫♬ ♭♮♯ ", "♫♬♩ ♮♯♭ ", "♬♩♪ ♯♭♮ ", "♩♪♫ ♭♮♯ "];
-                let indicator = Paragraph::new(frames[(tick as usize / 3) % frames.len()])
-                    .style(Style::default().fg(Color::Magenta))
-                    .alignment(Alignment::Center);
+                let indicator = Paragraph::new(Text::from(vec![
+                    Line::from(vec![
+                        Span::styled(
+                            frames[(tick as usize / 3) % frames.len()],
+                            Style::default().fg(Color::Magenta).bold(),
+                        ),
+                        Span::raw("  "),
+                        Span::styled("LIVE", Style::default().fg(Color::Green).bold()),
+                    ]),
+                    Line::from(Span::styled(
+                        "Rainwave community radio",
+                        Style::default().fg(Color::DarkGray),
+                    )),
+                ]));
                 f.render_widget(indicator, chunks[0]);
 
-                // Song info
                 let title = Paragraph::new(Text::from(vec![
                     Line::from(vec![
-                        Span::styled("♪ ", Style::default().fg(Color::Yellow)),
+                        Span::styled("Title  ", Style::default().fg(Color::DarkGray)),
                         Span::styled(&song.title, Style::default().fg(Color::White).bold()),
                     ]),
                     Line::from(vec![
-                        Span::styled("  by ", Style::default().fg(Color::Gray)),
+                        Span::styled("Artist ", Style::default().fg(Color::DarkGray)),
                         Span::styled(&song.artist, Style::default().fg(Color::Cyan)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Album  ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            song.album.as_deref().unwrap_or("Unknown Album"),
+                            Style::default().fg(Color::Green),
+                        ),
                     ]),
                 ]))
                 .block(Block::default().borders(Borders::NONE));
                 f.render_widget(title, chunks[1]);
 
-                // Album and rating
                 let info = Paragraph::new(Text::from(vec![
                     Line::from(vec![
-                        Span::styled("  └─ ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(
-                            song.album.as_deref().unwrap_or("Unknown Album"),
-                            Style::default().fg(Color::Green)
-                        ),
-                        Span::raw("  "),
-                        Span::styled(
-                            format_rating(song.rating_user),
-                            Style::default().fg(Color::Yellow)
-                        ),
+                        Span::styled("Rating ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(format_rating(song.rating_user), Style::default().fg(Color::Yellow)),
+                        Span::raw("   "),
+                        Span::styled("Length ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(format_duration(song.length), Style::default().fg(Color::White)),
+                        Span::raw("   "),
+                        Span::styled("Votes ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(song.votes.to_string(), Style::default().fg(Color::Magenta)),
                     ]),
                 ]))
                 .block(Block::default().borders(Borders::NONE));
@@ -76,7 +105,7 @@ pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData
 
                 // Listener count
                 if let Some(listeners) = data.listener_count {
-                    let listeners_text = Paragraph::new(format!("👂 {} listeners", listeners))
+                    let listeners_text = Paragraph::new(format!("{} listeners", listeners))
                         .style(Style::default().fg(Color::DarkGray))
                         .alignment(Alignment::Right);
                     f.render_widget(listeners_text, chunks[3]);
@@ -105,7 +134,7 @@ pub fn render_now_playing(f: &mut Frame, area: Rect, sync_data: &Option<SyncData
             }
         }
     } else {
-        let loading = Paragraph::new("⏳ Loading...")
+        let loading = Paragraph::new("Loading...")
             .style(Style::default().fg(Color::Gray))
             .alignment(Alignment::Center);
         f.render_widget(loading, inner);
@@ -162,7 +191,7 @@ fn render_album_art(f: &mut Frame, area: Rect, song: &Song, album_art: Option<&A
 }
 
 pub fn render_election(f: &mut Frame, area: Rect, election: &Option<Election>) {
-    let block = styled_block(" 🗳️  Vote Now! ", Color::Yellow);
+    let block = styled_block(" Vote Now ", Color::Yellow);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -224,7 +253,7 @@ pub fn render_election(f: &mut Frame, area: Rect, election: &Option<Election>) {
 }
 
 pub fn render_request_queue(f: &mut Frame, area: Rect, requests: &[RequestEntry]) {
-    let block = styled_block(" 📋 Request Queue ", Color::Green);
+    let block = styled_block(" Request Queue ", Color::Green);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -256,7 +285,7 @@ pub fn render_request_queue(f: &mut Frame, area: Rect, requests: &[RequestEntry]
 }
 
 pub fn render_stations(f: &mut Frame, area: Rect, stations: &[Station], selected: usize) {
-    let block = styled_block(" 📻 Stations ", Color::Blue);
+    let block = styled_block(" Stations ", Color::Blue);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -285,7 +314,7 @@ pub fn render_stations(f: &mut Frame, area: Rect, stations: &[Station], selected
 }
 
 pub fn render_help(f: &mut Frame, area: Rect) {
-    let block = styled_block(" ❓ Help ", Color::Magenta);
+    let block = styled_block(" Help ", Color::Magenta);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -322,7 +351,7 @@ pub fn render_help(f: &mut Frame, area: Rect) {
 }
 
 pub fn render_login(f: &mut Frame, area: Rect, username: &str, password_len: usize) {
-    let block = styled_block(" 🔐 Login ", Color::Yellow);
+    let block = styled_block(" Login ", Color::Yellow);
     let inner = block.inner(area);
     f.render_widget(ratatui::widgets::Clear, area);
     f.render_widget(block, area);
@@ -358,7 +387,7 @@ pub fn render_login(f: &mut Frame, area: Rect, username: &str, password_len: usi
 }
 
 pub fn render_search(f: &mut Frame, area: Rect, query: &str, results: &[Song], selected: usize) {
-    let block = styled_block(" 🔍 Search ", Color::Cyan);
+    let block = styled_block(" Search ", Color::Cyan);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -404,7 +433,7 @@ pub fn render_search(f: &mut Frame, area: Rect, query: &str, results: &[Song], s
 }
 
 pub fn render_albums(f: &mut Frame, area: Rect, albums: &[Album], selected: usize) {
-    let block = styled_block(" 💿 Albums ", Color::Green);
+    let block = styled_block(" Albums ", Color::Green);
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -449,7 +478,16 @@ pub fn render_albums(f: &mut Frame, area: Rect, albums: &[Album], selected: usiz
     f.render_widget(list, inner);
 }
 
-pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, playing: bool, paused: bool, tick: u64, station: &str) {
+pub fn render_status_bar(
+    f: &mut Frame,
+    area: Rect,
+    user: &Option<UserInfo>,
+    playing: bool,
+    paused: bool,
+    tick: u64,
+    station: &str,
+    message: Option<&str>,
+) {
     let play_icon = if paused { "⏸" } else if playing { "▶" } else { "■" };
     let meter = if playing && !paused {
         let frames = ["▁▃▅▇", "▂▄▆█", "▇▅▃▁", "█▆▄▂"];
@@ -459,24 +497,68 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, pla
     } else {
         "____"
     };
-    let user_str = user.as_ref()
+    let user_str = user
+        .as_ref()
         .map(|u| format!("{} ({} pts)", u.username, u.listener_points))
         .unwrap_or_else(|| "Not logged in (Ctrl+L to login)".to_string());
     
-    let status = Paragraph::new(Text::from(vec![
-        Line::from(vec![
-            Span::styled(play_icon, Style::default().fg(Color::Green).bold()),
-            Span::raw(" "),
-            Span::styled(meter, Style::default().fg(Color::Green).bold()),
-            Span::raw(" "),
-            Span::styled(station, Style::default().fg(Color::Cyan)),
-            Span::raw(" | "),
-            Span::styled(user_str, Style::default().fg(Color::Yellow)),
-        ]),
-    ]))
-    .block(Block::default().borders(Borders::TOP))
-    .style(Style::default().bg(Color::DarkGray));
+    let mut spans = vec![
+        Span::styled(play_icon, Style::default().fg(Color::Green).bold()),
+        Span::raw(" "),
+        Span::styled(meter, Style::default().fg(Color::Green).bold()),
+        Span::raw(" "),
+        Span::styled(station.to_owned(), Style::default().fg(Color::Cyan)),
+        Span::raw(" | "),
+        Span::styled(user_str, Style::default().fg(Color::Yellow)),
+    ];
+
+    if let Some(message) = message {
+        spans.push(Span::raw(" | "));
+        spans.push(Span::styled(message.to_string(), Style::default().fg(Color::White)));
+    }
+
+    let status = Paragraph::new(Text::from(vec![Line::from(spans)]))
+        .block(Block::default().borders(Borders::TOP))
+        .style(Style::default().bg(Color::DarkGray));
     f.render_widget(status, area);
+}
+
+pub fn render_nav_bar(f: &mut Frame, area: Rect, active: &str, station: &str) {
+    let tabs = ["NowPlaying", "Stations", "Requests", "Search", "Albums"];
+    let mut spans = vec![
+        Span::styled(
+            " Rainwave TUI ",
+            Style::default().fg(Color::Black).bg(Color::Cyan).bold(),
+        ),
+        Span::raw(" "),
+    ];
+
+    for tab in tabs {
+        let is_active = tab == active;
+        let label = match tab {
+            "NowPlaying" => "Now",
+            "Stations" => "Stations",
+            "Requests" => "Requests",
+            "Search" => "Search",
+            "Albums" => "Albums",
+            _ => tab,
+        };
+        let style = if is_active {
+            Style::default().fg(Color::Black).bg(Color::Yellow).bold()
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(format!(" {label} "), style));
+        spans.push(Span::raw(" "));
+    }
+
+    spans.push(Span::styled(
+        format!("  station: {station}"),
+        Style::default().fg(Color::Cyan),
+    ));
+
+    let nav = Paragraph::new(Line::from(spans));
+    f.render_widget(nav, area);
 }
 
 pub fn render_transition(f: &mut Frame, area: Rect, label: &str, tick: u64) {

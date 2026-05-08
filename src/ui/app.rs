@@ -697,13 +697,32 @@ fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(vec![
+            Constraint::Length(1),
             Constraint::Min(0),
             Constraint::Length(1),
             Constraint::Length(1),
         ])
         .split(f.area());
     
-    let main_area = chunks[0];
+    let station_name = app
+        .stations
+        .get(app.selected_station)
+        .map(|s| s.name.as_str())
+        .unwrap_or("None");
+
+    let view_name = match app.current_view {
+        AppView::NowPlaying => "NowPlaying",
+        AppView::Stations => "Stations",
+        AppView::Requests => "Requests",
+        AppView::Search => "Search",
+        AppView::Albums => "Albums",
+        AppView::AlbumView(_) => "AlbumView",
+        AppView::Help => "Help",
+        AppView::Login => "Login",
+    };
+
+    render_nav_bar(f, chunks[0], view_name, station_name);
+    let main_area = chunks[1];
     
     match &app.current_view {
         AppView::NowPlaying => {
@@ -715,10 +734,14 @@ fn ui(f: &mut Frame, app: &mut App) {
                 ])
                 .split(main_area);
             
-            render_now_playing(f, inner_chunks[0], &app.sync_data, app.album_art.as_ref(), app.animation_tick,
-                &app.stations.get(app.selected_station)
-                    .map(|s| s.name.clone())
-                    .unwrap_or_else(|| "Unknown".to_string()));
+            render_now_playing(
+                f,
+                inner_chunks[0],
+                &app.sync_data,
+                app.album_art.as_ref(),
+                app.animation_tick,
+                station_name,
+            );
             
             let election = app.sync_data.as_ref()
                 .and_then(|d| d.sched_current.as_ref())
@@ -767,10 +790,6 @@ fn ui(f: &mut Frame, app: &mut App) {
         }
     }
     
-    let station_name = app.stations.get(app.selected_station)
-        .map(|s| s.name.as_str())
-        .unwrap_or("None");
-    
     let user_info = if app.auth.is_logged_in() {
         Some(UserInfo {
             user_id: app.auth.user_id.unwrap_or(0),
@@ -785,25 +804,19 @@ fn ui(f: &mut Frame, app: &mut App) {
     
     render_status_bar(
         f,
-        chunks[1],
+        chunks[2],
         &user_info,
         app.player.is_playing(),
         app.player.is_paused(),
         app.animation_tick,
         station_name,
+        app.status_message
+            .as_ref()
+            .filter(|(_, timestamp)| timestamp.elapsed() < Duration::from_secs(6))
+            .map(|(message, _)| message.as_str()),
     );
     
-    let view_name = match app.current_view {
-        AppView::NowPlaying => "NowPlaying",
-        AppView::Stations => "Stations",
-        AppView::Requests => "Requests",
-        AppView::Search => "Search",
-        AppView::Albums => "Albums",
-        AppView::AlbumView(_) => "AlbumView",
-        AppView::Help => "Help",
-        AppView::Login => "Login",
-    };
-    render_keybindings(f, chunks[2], view_name);
+    render_keybindings(f, chunks[3], view_name);
     
     if app.show_help {
         render_help(f, centered_rect(60, 70, f.area()));
