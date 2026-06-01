@@ -77,6 +77,7 @@ pub struct App {
     pub transition_frames: u8,
     pub transition_label: String,
     pub pending_search: Option<String>,
+    pub pending_login: Option<(String, String)>,
     pub album_art: Option<AlbumArt>,
     pub album_art_url: Option<String>,
 }
@@ -123,6 +124,7 @@ impl App {
             transition_frames: 0,
             transition_label: "Now Playing".to_string(),
             pending_search: None,
+            pending_login: None,
             album_art: None,
             album_art_url: None,
         })
@@ -333,10 +335,7 @@ impl App {
             KeyCode::Enter => {
                 let username = self.login_username.clone();
                 let password = self.login_password.clone();
-                let api = self.api.clone();
-                tokio::spawn(async move {
-                    let _ = api.login(&username, &password).await;
-                });
+                self.pending_login = Some((username, password));
                 self.input_mode = InputMode::Normal;
                 self.current_view = AppView::NowPlaying;
                 self.login_username.clear();
@@ -687,6 +686,14 @@ async fn run_event_loop(
                     }
                     Err(e) => app.set_status(format!("Search failed: {e}")),
                 }
+            }
+        }
+
+        if let Some((username, password)) = app.pending_login.take() {
+            if username.trim().is_empty() || password.is_empty() {
+                app.set_status("Username and password are required".to_string());
+            } else {
+                let _ = app.login(&username, &password).await;
             }
         }
     }
