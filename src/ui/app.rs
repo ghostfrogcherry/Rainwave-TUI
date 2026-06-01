@@ -78,6 +78,7 @@ pub struct App {
     pub transition_label: String,
     pub pending_search: Option<String>,
     pub pending_login: Option<(String, String)>,
+    pub pending_request_song: Option<i32>,
     pub album_art: Option<AlbumArt>,
     pub album_art_url: Option<String>,
 }
@@ -125,6 +126,7 @@ impl App {
             transition_label: "Now Playing".to_string(),
             pending_search: None,
             pending_login: None,
+            pending_request_song: None,
             album_art: None,
             album_art_url: None,
         })
@@ -492,16 +494,13 @@ impl App {
             }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Request current song or selected song
-                if let Some(ref data) = self.sync_data {
-                    if let Some(ref current) = data.sched_current {
-                        if let Some(ref song) = current.song {
-                            let song_id = song.id;
-                            let api = self.api.clone();
-                            tokio::spawn(async move {
-                                let _ = api.request_song(song_id).await;
-                            });
-                        }
-                    }
+                let song_id = self.sync_data
+                    .as_ref()
+                    .and_then(|data| data.sched_current.as_ref())
+                    .and_then(|current| current.song.as_ref())
+                    .map(|song| song.id);
+                if let Some(song_id) = song_id {
+                    self.pending_request_song = Some(song_id);
                 }
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -595,11 +594,7 @@ impl App {
             }
             AppView::Search => {
                 if let Some(song) = self.search_results.get(self.selected_search) {
-                    let song_id = song.id;
-                    let api = self.api.clone();
-                    tokio::spawn(async move {
-                        let _ = api.request_song(song_id).await;
-                    });
+                    self.pending_request_song = Some(song.id);
                 }
             }
             AppView::Albums => {
@@ -694,6 +689,12 @@ async fn run_event_loop(
                 app.set_status("Username and password are required".to_string());
             } else {
                 let _ = app.login(&username, &password).await;
+            }
+        }
+
+        if let Some(song_id) = app.pending_request_song.take() {
+            if let Err(e) = app.request_song(song_id).await {
+                app.set_status(format!("Request failed: {e}"));
             }
         }
     }
