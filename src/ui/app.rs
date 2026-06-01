@@ -690,7 +690,7 @@ async fn run_event_loop(
         }
 
         if let Some((username, password)) = app.pending_login.take() {
-            if username.trim().is_empty() || password.is_empty() {
+            if username.trim().is_empty() || password.trim().is_empty() {
                 app.set_status("Username and password are required".to_string());
             } else {
                 let _ = app.login(&username, &password).await;
