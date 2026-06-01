@@ -79,6 +79,8 @@ pub struct App {
     pub pending_search: Option<String>,
     pub pending_login: Option<(String, String)>,
     pub pending_request_song: Option<i32>,
+    pub pending_load_albums: bool,
+    pub pending_open_album: Option<Album>,
     pub album_art: Option<AlbumArt>,
     pub album_art_url: Option<String>,
 }
@@ -127,6 +129,8 @@ impl App {
             pending_search: None,
             pending_login: None,
             pending_request_song: None,
+            pending_load_albums: false,
+            pending_open_album: None,
             album_art: None,
             album_art_url: None,
         })
@@ -261,11 +265,21 @@ impl App {
         Ok(())
     }
 
-    pub async fn load_album_songs(&mut self, album_id: i32) -> Result<()> {
-        let album = self.api.get_album(album_id).await?;
-        // In a real implementation, the album API would return songs
-        // For now, we'll use search as a workaround
-        self.set_status(format!("Loaded album: {}", album.name));
+    pub async fn load_album_songs(&mut self, selected_album: Album) -> Result<()> {
+        let (album, songs) = self.api.get_album_with_songs(selected_album.id).await?;
+        let resolved_album = if album.name.is_empty() {
+            selected_album
+        } else {
+            album
+        };
+        self.current_album_songs = songs;
+        self.selected_song = 0;
+        self.set_view(AppView::AlbumView(resolved_album.clone()));
+        self.set_status(format!(
+            "Loaded {} song(s) from {}",
+            self.current_album_songs.len(),
+            resolved_album.name
+        ));
         Ok(())
     }
 
@@ -422,6 +436,11 @@ impl App {
         }
 
         match key.code {
+            KeyCode::Esc => {
+                if matches!(self.current_view, AppView::AlbumView(_)) {
+                    self.set_view(AppView::Albums);
+                }
+            }
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if matches!(self.current_view, AppView::Login) {
                     self.current_view = AppView::NowPlaying;
@@ -553,6 +572,11 @@ impl App {
                     self.selected_album -= 1;
                 }
             }
+            AppView::AlbumView(_) => {
+                if self.selected_song > 0 {
+                    self.selected_song -= 1;
+                }
+            }
             _ => {}
         }
     }
@@ -581,6 +605,11 @@ impl App {
                     self.selected_album += 1;
                 }
             }
+            AppView::AlbumView(_) => {
+                if self.selected_song + 1 < self.current_album_songs.len() {
+                    self.selected_song += 1;
+                }
+            }
             _ => {}
         }
     }
@@ -600,10 +629,15 @@ impl App {
             AppView::Albums => {
                 if let Some(album) = self.albums.get(self.selected_album) {
                     let album = album.clone();
-                    let api = self.api.clone();
-                    tokio::spawn(async move {
-                        let _ = api.get_album(album.id).await;
-                    });
+                    self.current_album_songs.clear();
+                    self.selected_song = 0;
+                    self.set_view(AppView::AlbumView(album.clone()));
+                    self.pending_open_album = Some(album);
+                }
+            }
+            AppView::AlbumView(_) => {
+                if let Some(song) = self.current_album_songs.get(self.selected_song) {
+                    self.pending_request_song = Some(song.id);
                 }
             }
             _ => {}
@@ -624,6 +658,9 @@ impl App {
     }
 
     fn set_view(&mut self, view: AppView) {
+        if matches!(view, AppView::Albums) && self.albums.is_empty() {
+            self.pending_load_albums = true;
+        }
         self.transition_label = view.label().to_string();
         self.transition_frames = 8;
         self.current_view = view;
@@ -699,6 +736,20 @@ async fn run_event_loop(
                 app.set_status(format!("Request failed: {e}"));
             }
         }
+
+        if app.pending_load_albums {
+            app.pending_load_albums = false;
+            if let Err(e) = app.load_albums().await {
+                app.set_status(format!("Album load failed: {e}"));
+            }
+        }
+
+        if let Some(album) = app.pending_open_album.take() {
+            if let Err(e) = app.load_album_songs(album).await {
+                app.set_status(format!("Album songs failed: {e}"));
+                app.set_view(AppView::Albums);
+            }
+        }
     }
     Ok(())
 }
@@ -766,8 +817,7 @@ fn ui(f: &mut Frame, app: &mut App) {
             render_albums(f, main_area, &app.albums, app.selected_album);
         }
         AppView::AlbumView(album) => {
-            let block = styled_block(&format!(" Album: {} ", album.name), Color::Green);
-            f.render_widget(block, main_area);
+            render_album_view(f, main_area, album, &app.current_album_songs, app.selected_song);
         }
         AppView::Help => {
             render_help(f, main_area);

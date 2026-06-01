@@ -182,6 +182,11 @@ impl RainwaveApi {
     }
 
     pub async fn get_album(&self, album_id: i32) -> Result<Album> {
+        let (album, _) = self.get_album_with_songs(album_id).await?;
+        Ok(album)
+    }
+
+    pub async fn get_album_with_songs(&self, album_id: i32) -> Result<(Album, Vec<Song>)> {
         let url = format!("{}/album", API_BASE);
         let mut params = self.get_params();
         params.push(("album_id", album_id.to_string()));
@@ -190,6 +195,8 @@ impl RainwaveApi {
         struct AlbumResult {
             success: bool,
             text: Option<String>,
+            #[serde(default, alias = "song_data", alias = "songs")]
+            songs: Vec<Song>,
         }
 
         #[derive(Deserialize)]
@@ -203,6 +210,8 @@ impl RainwaveApi {
             rating_user: Option<f32>,
             fav: Option<bool>,
             song_count: Option<i32>,
+            #[serde(default, alias = "song_data", alias = "songs")]
+            songs: Vec<Song>,
         }
 
         let resp = self.client
@@ -214,7 +223,7 @@ impl RainwaveApi {
             .await?;
 
         if resp.album.success {
-            Ok(Album {
+            let album = Album {
                 id: resp.id.unwrap_or(album_id),
                 name: resp.name.unwrap_or_default(),
                 artist: resp.artist.unwrap_or_default(),
@@ -223,7 +232,16 @@ impl RainwaveApi {
                 rating_user: resp.rating_user,
                 fav: resp.fav,
                 song_count: resp.song_count,
-            })
+            };
+            let mut songs = if resp.songs.is_empty() {
+                resp.album.songs
+            } else {
+                resp.songs
+            };
+            for song in &mut songs {
+                normalize_song(song);
+            }
+            Ok((album, songs))
         } else {
             Err(anyhow!(resp.album.text.unwrap_or_else(|| "Failed to get album".to_string())))
         }

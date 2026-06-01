@@ -449,6 +449,63 @@ pub fn render_albums(f: &mut Frame, area: Rect, albums: &[Album], selected: usiz
     f.render_widget(list, inner);
 }
 
+pub fn render_album_view(
+    f: &mut Frame,
+    area: Rect,
+    album: &Album,
+    songs: &[Song],
+    selected: usize,
+) {
+    let block = styled_block(&format!(" 💿 Album: {} ", album.name), Color::Green);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Length(2), Constraint::Min(0)])
+        .split(inner);
+
+    let summary = Paragraph::new(format!(
+        "{} • {} tracks",
+        album.artist,
+        songs.len()
+    ))
+    .style(Style::default().fg(Color::Gray));
+    f.render_widget(summary, layout[0]);
+
+    if songs.is_empty() {
+        let loading = Paragraph::new("Loading songs...")
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+        f.render_widget(loading, layout[1]);
+        return;
+    }
+
+    let rows: Vec<Row> = songs
+        .iter()
+        .enumerate()
+        .map(|(i, song)| {
+            let style = if i == selected {
+                Style::default().fg(Color::Yellow).bg(Color::DarkGray)
+            } else {
+                Style::default()
+            };
+            Row::new(create_song_row(song)).style(style)
+        })
+        .collect();
+
+    let table = Table::new(rows, &[
+        Constraint::Percentage(35),
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+        Constraint::Length(10),
+        Constraint::Length(10),
+    ])
+    .header(table_header())
+    .block(Block::default().borders(Borders::NONE));
+    f.render_widget(table, layout[1]);
+}
+
 pub fn render_status_bar(f: &mut Frame, area: Rect, user: &Option<UserInfo>, playing: bool, paused: bool, tick: u64, station: &str) {
     let play_icon = if paused { "⏸" } else if playing { "▶" } else { "■" };
     let meter = if playing && !paused {
@@ -510,6 +567,7 @@ pub fn render_keybindings(f: &mut Frame, area: Rect, view_name: &str) {
         "Requests" => "[Tab] Switch [Ctrl+D] Delete [Ctrl+R] Request [Ctrl+H] Help [Ctrl+Q] Quit",
         "Search" => "[Tab] Switch [Ctrl+K] Search [Enter] Request [Ctrl+H] Help [Ctrl+Q] Quit",
         "Albums" => "[Tab] Switch [Enter] Select [Ctrl+H] Help [Ctrl+Q] Quit",
+        "AlbumView" => "[Tab] Switch [Esc] Back [Enter] Request [Ctrl+H] Help [Ctrl+Q] Quit",
         "Login" => "[Enter] Next [Esc] Cancel",
         _ => "[Tab] Switch [Ctrl+H] Help [Ctrl+Q] Quit",
     };
