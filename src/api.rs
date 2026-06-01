@@ -195,6 +195,7 @@ impl RainwaveApi {
         struct AlbumResult {
             success: bool,
             text: Option<String>,
+            // The album endpoint has returned both `song_data` and `songs` in different payload shapes.
             #[serde(default, alias = "song_data", alias = "songs")]
             songs: Vec<Song>,
         }
@@ -210,6 +211,7 @@ impl RainwaveApi {
             rating_user: Option<f32>,
             fav: Option<bool>,
             song_count: Option<i32>,
+            // Keep both aliases to tolerate historical/variant response keys.
             #[serde(default, alias = "song_data", alias = "songs")]
             songs: Vec<Song>,
         }
@@ -233,6 +235,7 @@ impl RainwaveApi {
                 fav: resp.fav,
                 song_count: resp.song_count,
             };
+            // Prefer top-level songs when present; otherwise fall back to nested album songs.
             let mut songs = if resp.songs.is_empty() {
                 resp.album.songs
             } else {
